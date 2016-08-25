@@ -1,0 +1,164 @@
+### NPM INIT ###
+
+To get started with any node project in an empty directory (requires node to have been installed)
+$ npm init
+
+This command will ask a bunch of questions which we can answer if we want and it will build the node package.json config file
+
+### NPM PACKAGE INSTALLS ###
+# Save Flag:
+When we type 'install --save' the --save flag indicates the packages being installed should be added as dependencies in the node.js configuration
+file package.json. This saves us having to add these dependencies manually, so we always know what packages are required by our project. 
+
+# Multiple Packages:
+We can install multiple packages at once using a space-seperated list of package names
+
+# Specifying versions:
+We can install the latest package version by just using the package name, or specify a specific package version using @version e.g.
+npm install gulp@3.9.0 to install gulp package version 3.9.0
+
+Following command installs up-to-date gulp and other required packages and adds them as dependencies to package.json
+
+$ npm install --save gulp gulp-connect gulp-open
+
+# Global install:
+The global flag -g indicates that the installation of this package should not just be for this project, but global for the operating system
+This allows us to use the package as a command line tool, so we can actually execute 'gulp' as a program in our terminal
+I think we need to do the base package install before doing a global? But not sure
+
+$ npm install -g gulp
+
+Before the global install 'gulp -v' on the command line will produce "bash: gulp: command not found"
+After running global install 'gulp -v' command will output current version number as expected
+
+### GULP INSTALL ###
+Covered above, but to summarise: We want it listed as a dependency of our project as well as accessible as a command-line tool so we can 
+run it from the terminal to perform our build operations
+
+$ npm install --save gulp gulp-connect gulp-open
+$ npm install -g gulp
+
+### WHAT IS GULP? ###
+Gulp is toolkit to assist with the build and test process for web applications. I previously hadn't thought of purely client-side web technologies
+like HTML or javascript requiring a 'build' process, but there are a few reasons why it is needed in this playground: 
+- Helps automate the process of running the React transpiler to convert from the React .jsx file format to native javascript
+- Include dependent modules into scripts files
+- Run plugins to minimise javascript into a single compressed file to reduce number and data size of HTTP requests
+- Run compatable plugins to performing linting - i.e. checking code quality for potential issues
+- Provide a streamlined testing environment (automatically reloading browser windows on save for example)
+
+There are apparently thousands of different plugins which can be used with gulp to help with the build (i.e. transpiling, e.g. from Angular, React
+or TypeScript to raw JavaScript for example), linting, testing and debugging processes. Gulp itself runs as a node.js program which defines a set 
+of tasks which we can call via terminal (hence the need to install globally) to perform these processes. 
+
+Alternatives for managing this build path include an older package called Grunt, which sounds a little more complex, and using the package.json 
+config file itself. This option is a little intriguing - if you look at a package.json file you'll notice it includes a section called 'scripts' e.g.
+"scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+Turns out anything defined in 'scripts' can actually be run as a command on the command line using 'npm run' - for example we can get that error message 
+to echo to the terminal by running the following from inside our node.js application root directory:
+$ npm run test
+
+Anything that can be run on the command line can be added in to an npm script command, and there are whole bunches of command line packages that will 
+do those same lint and build operations. Npm scripts can reference each other to build up complex script workflows simply by calling the command directly
+like we would do on the command line e.g.
+"scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+    "run_test": "npm run test && npm run <some_other_script>"
+},
+
+So npm scripts are a nifty little option for automating the build and test process.
+But the course I'm doing is gulp focused, and it seems easy enough to use, so I'll stick with that 
+
+### PROJECT STRUCTURE ###
+The project structured used in the course (at least at the beginning) is: 
+    /src:           source files: html, javascript and jsx as written with long variable names and comments
+    /dist:          files for distribution - i.e. the minimised JS and HTML which we will install on our production web server
+    /node_modules:  required folder where node packages are located for inclusion in the app
+This is an interesting project structure - it looks a little like a proper compiled language with /src and /bin folders where
+bin is the binaries compiled from source. Except instead we have dist which is distribution javascript and html code transpiled 
+from source. 
+
+
+### GULP CONFIGURATION ###
+The gulp configuration file is always called gulpfile.js and is stored in the project root directory
+It acts just like a standard node.js file, importing packages using 'require()'
+For full details have a look at the gulpfile.js in this project, it is heavily commented
+
+# Globs:
+Gulp uses a concept called 'globs' to identify sets of files - its basically a pattern matching engine to allow you to select
+groups of files by filename across levels of a directory structure using match patterns and wildcards. Very useful to say select
+all javascript file for one operation and all html files for another. Most of the gulp file streaming operations work with globs
+so they can treat easily apply different operations to different file types and locations.
+Looks like its actually just another node package: node-glob, which gulp makes use of for this purpose
+
+### NODEJS STREAMS ###
+Streams are like the unix pipes between commands in that they allow you to read data from one place and direct it to another. 
+Turns out the request and response objects in the node HTTP server are actually streams. Streams can be pretty much anything, 
+like a file on the file system. Looks like the important thing about streams is that they give you access to that style of 
+incrementally loading data from a file which is like a line reader in a traditional program. In the example below a stream 
+is used to read a file in chunks until the end is reached (we have no control over the chunk sizes). 
+
+var readableStream = fs.createReadStream('file.txt');
+var data = '';
+readableStream.setEncoding('utf8');
+readableStream.on('data', function(chunk) {
+    data+=chunk;
+});
+readableStream.on('end', function() {
+    console.log(data);
+});
+
+I would hazard these streams have come about because in the transition from javascript being client side to running it server-side, 
+we've had to make it do a few more things, like access the server file system to read/write config files for example. In the browser,
+that would be a bit of a no-no for client side code to do, but definitely useful for server-side.
+
+The 'pipe' operation comes into play by allowing us to move data between objects which handle streams without having to touch the messy chunked 
+data ourselves - the functions supporting streams already have built-in capabilites to send, receive and process data in the stream chunks.
+This allows us to do things like the following with the pipe function to read from a stream and write to another stream:
+
+var fs = require('fs');
+var readableStream = fs.createReadStream('file1.txt');
+var writableStream = fs.createWriteStream('file2.txt');
+readableStream.pipe(writableStream);
+
+And the great thing about piping is that we can chain it to perform multiple operations on our original set of data to keep modifying it.
+The following gets a file input read streams, then decompresses it, then outputs the decompressed data to a file write stream:
+fs.createReadStream('input.txt.gz')
+  .pipe(zlib.createGunzip())
+  .pipe(fs.createWriteStream('output.txt'));
+
+And just like traditional streams, we need to call 'end' function to flush the last bits of data (which could be hanging around waiting
+for more data to complete a chunk before it is sent). This is why we have to call res.send() or res.end() on a HTTP request - to flush out
+the last data as from the HTTP response object stream - which is a writable stream. It is also why nothing else can be written after 
+calling send or end, the stream has been flushed and closed (subsequent write attempts on a writeable stream after end() has been called will
+result in an error being thrown by node.js)
+
+
+### BROWSERIFY ###
+- Javascript bundler: combines multiple files into one file called 'bundle.js' with enforced variable scope between different files
+- Javascript minimiser: remove comments and shorten variable names to reduce overall file size
+- Include npm packages: npm has a huge range of useful libraries many of which can be equally as useful in our client-side code. Browserify 
+    does something pretty neat - it allows us to have require('npm-package') statements, which are usually only recognised by the node.js server,
+    in our code destined for client-side javascript. Browserify will add in the required code to make sure that package works just the same on 
+    client side, so we can access things like uuid for example without having to add in a huge range of <script src=""> tags in our page to pull 
+    .JS libraries from all over the place!
+
+The output of browserify is a single minimised javascript file (how to debug??), which we then include in our html with a standard <script> tag:
+<script src="scripts/bundle.js" ></script>
+
+Browserify expects as input a starting source file - e.g. /src/main.js, and it will recursively read the require() dependencies of that file to 
+decide from there what other javascript files to include  (i.e. it won't include any orphaned .js files that are not required in the dependency chain 
+from the starting .js file).
+
+npm install -g browserify
+
+### ADDITIONAL INSTALLS ###
+npm install --save browserify reactify vinyl-source-stream
+
+### VINYL SOURCE STREAM ###
+Allows us to use a standard text file stream with gulp. An alternative to the 'fs' package shown above I guess
+
+### REACTIFY ###
+The React .JSX transpiler
