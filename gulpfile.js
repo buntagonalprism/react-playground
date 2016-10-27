@@ -10,6 +10,8 @@ var open = require('gulp-open');        // Plugin to open a URL in a web browser
 var browserify = require('browserify'); // Javascript bundler
 var reactify = require('reactify');     // React JSX transpiler
 var source = require('vinyl-source-stream')     // Use conventional text streams with gulp
+var concat = require('gulp-concat');     // Concatenates files
+var eslint = require('gulp-eslint');        // Lints JS filex including JSX
 
 // Config object used to keep all gulp-related settings in one place
 var config = {
@@ -19,6 +21,12 @@ var config = {
         html:   './src/*.html',         // File path to match any html document in the root of the 'src' directory
                                         // This pattern syntax is also referred to as a 'glob' using node-glob package
         js:     './src/**/*.js',        // Glob matchs any .js file under 'src' or any subdirectory - used for monitoring js files
+        img:    './src/images/*',       // All files in images folder
+        css: [                          // Retrieve css files
+            'node_modules/bootstrap/dist/css/bootstrap.min.css',  // Bootstrap files are part of bootstrap node module
+            'node_modules/bootstrap/dist/css/bootstrap-theme.min.css',
+
+        ], 
         mainJs: './src/main.js',        // Javacript entry-point file, also used as starting point for browserify bundling
         dist:   './dist'                // File path to match the 'dist' directory for build process output
     }
@@ -30,8 +38,10 @@ var config = {
 gulp.task('connect', function() {
     connect.server({
         root: ['dist'],
+        fallback: 'dist/index.html', // for browserHistory compatability, redirect all other paths to index.html
         port: config.port,
         base: config.devBaseUrl,
+       
         // livereload option means that the server can cause the browser page to refresh so that the 
         // page can be automatically reloaded without user intervention
         livereload: true
@@ -87,16 +97,44 @@ gulp.task('js',function(){
         .pipe(connect.reload());
 });
 
+// Css task
+gulp.task('css', function() {
+    gulp.src(config.paths.css)
+        .pipe(concat('bundle.css'))   // Directly concatenate css files
+        .pipe(gulp.dest(config.paths.dist + '/css'));
+});
 
 // Tasks to use the gulp file system monitoring command - watch() to monitor a file pattern set of files
 // for changes, and when changes occur to execute a set of tasks identified by name
 // Note that we are not watching a directory here but an actual file search pattern which is kind of neat
 gulp.task('watch', function() {
     gulp.watch(config.paths.html, ['html']);
-    gulp.watch(config.paths.js, ['js']);
+    gulp.watch(config.paths.js, ['js', 'lint']);
+    gulp.watch(config.paths.img, ['images']);
 });
+
+// Get javascript source and pass it to eslint for linting, and return output to console using eslint.format()
+// See notes for details on the config json file
+gulp.task('lint', function() {
+    return gulp.src(config.paths.js)
+        .pipe(eslint())
+        .pipe(eslint.format())
+        .pipe(eslint.failAfterError());
+});
+
+// Copy images from source to distribution folder and reload
+gulp.task('images', function() {
+    gulp.src(config.paths.img)
+        .pipe(gulp.dest(config.paths.dist + '/images'))
+        .pipe(connect.reload());
+
+    // Favicon is an exception - it will sit in root src folder and end up in root distribution folder
+    gulp.src('./src/favicon.ico')
+        .pipe(gulp.dest(config.paths.dist));
+})
+
 
 // The default task is a reserved name - this special task is run by simply calling '~$ gulp' from the command 
 // line in the project root directory. Here it doesn't have any function of its own apart from running the dependencies
 // although it could have a function just like all the preceeding tasks if we wanted
-gulp.task('default', ['html','open', 'watch', 'js']);
+gulp.task('default', ['html','js', 'css', 'images', 'lint','open', 'watch']);

@@ -162,3 +162,629 @@ Allows us to use a standard text file stream with gulp. An alternative to the 'f
 
 ### REACTIFY ###
 The React .JSX transpiler
+
+### BOOTSTRAP, JQUERY ###
+Bootstrap is a library for responsive web components with a lot of functionality and styling built in. Jquery 
+is another library which has some of its own user interface components, but also it provides some powerful helper
+functions for interacting with the DOM on the page. I'm not sure if JQuery would actually be used for this with 
+React given we are using the virtual DOM instead, so perhaps its going to be used for its other helper functions 
+or perhaps some UI elements (jquery-UI)
+$ npm install --save bootstrap jquery gulp-concat
+
+okay so we didn't need to install browserify or reactify again to get things working - because they are included
+in the project node_modules directory. However on gulp we did need to install because we intall it globally at the
+operating system level so thnpmat we can run it from the command line. 
+
+Bootstrap requires jQuery apparently as a dependency, so that's probably why its there. 
+
+### ESLINT ###
+Linting in general is the practice of inspecting code for mistakes or breaches of best practice. Compiled languages
+typically do linting during compile time. For scripting languages we have to run a seperate piece of linting software
+against our code in order to get similar feedback. ESlint is a package for linting Javascript which is designed to 
+allow a flexible set of rules to be configured to apply to the code linting process. We will use a version designed 
+for inclusion in a gulp build process, gulp-eslint
+
+$ npm install --save gulp-eslint
+
+Eslint configuration is stored in a json config file. We've set eslint.config.json with the settings. Apparently version 1
+is a bit different to the version 0.15 used in the videos, however in general we set environment parameters (where this
+code was going to be executing), some rules to apply / switch off, enable jsx support, and allow some global variables
+to be defined - namely jQuery and $ required by bootstrap
+
+Hmm gulp-eslint wasn't finding the provided config file, renamed to ".eslintrc.json" according to standard ESLint docos
+and it seemed to find it automatically. Except its not actually doing Anything
+
+Major breaking point: NO RULES ENABLED BY DEFAULT in newer ESLint, which is why we weren't getting anything. 
+
+All rules are disabled by default in 1.0 as opposed to 0.15 where a select number were enabled
+Added a "no-undef" : 1 (on) rule and suddenly warnings started appearing. I used globals as 'true' instead of just listing 
+them and globals didn't show up in the undef list. But the undef list looks pretty stupid - its flagged 'require', 
+oh wait that might be the envs setting. At least its producing an output, but really going to have to play with what 
+we should use.
+
+We can extend a recommended set of ESlint rules to enable a few by default  
+Google "Eslint default rules" and see first paragraph for how to do this, and rest of doco for full list of rules
+If we set a rule to '1' it will show a warning, setting it to '2' will show an error. Also looks like we can't mix
+and match the documentation - the array syntax doesn't seem to work ('envs' intead of 'env' as well didn't work) - 
+we need to use objects with our environment name : true in order for eslint to recognise environment variables.
+For example it complained about the browser 'console' command and the nodejs 'require' command until we correctly
+added "node" and "browser" as target environments. 
+Looks like we don't need the dotfiles thing either. 
+
+Another breaking change - to allow for eslint JSX compatability we now need to enable it as an ecmaFeature under a 
+parserOptions feature in our ".eslintrc.json" file. Otherwise eslint was throwing errors whenever 
+ "parserOptions": {
+        "ecmaFeatures": {
+            "jsx":true
+        }
+    },
+
+### REACT ###
+So reactify provides the transpiling but react provides the base packages for our JSX
+$ npm install --save react@0.13.3 react-router@0.13.3 flux@2.0.3
+
+### REACT INTRODUCTION ###
+React is a component building model, fast due to its use of a virtual dom. 
+Components can be easily nested and passed up and down parent-child heirarchies (composable)
+Components can be easily plugged into existing frameworks as it provides just a view layer
+Friendly to rendering on both client and server
+Technically its a view layer, but we can also build controller views and act rather like a controller which create 
+dumb child views. 
+Missing two way binding (this helps avoid boilerplate?) - UI and data model are not kept in sync (bi-directional)
+all changes flow in one direction. Two way binding frameworks update the DOM (view) whenever data changes, and 
+whenever views are changed the data is automatically pushed back. In one-way binding, information does not flow back and 
+forth from data to view layer in the same channel. That is, while our data might push to the view layer in one direction,
+and user-side view changes will not directly affect our data unless we define processing and handling to that affect with
+a new one way binding in the return direction. 
+
+# JSX 
+JSX is a key component of React, although not technically a required one. It is a means to make use of the 
+JSX is essentially HTML in javascript - essentially, but not quite. Its technically XML very similar to HTML with some 
+considerations to allow us to write it in a normal JS file. It compiles to JavaScript using a React transpiler 
+The React javascript library contains many helper functions for creating HTML elements (which makes use of the virtual
+DOM to figure out the most efficient way to update the actual dom). Having javascript functions for creating elements
+also makes it easier to transpile JSX - it doesn't change it to html, it converts it to equivalent sets of React 
+javascript statements. It is technically possible to write the React javascript statements directly rather than using 
+JSX but JSX is a lot easier to write and makes a lot more sense to read. 
+
+For example, the following JSX function gets transpiled to native JavaScript 
+<h1 color="red">My Heading</h1>
+React.createElement("h1", {color:"red"}, "My Heading")
+
+Observe how the 'createElement' function allows us to specify all the normal arguments. The first is the base element - 
+a h1 heading, then attributes of that elements in a key-value object, and finally the contents of that element. Here
+the contents are just plain text. However we can equally include more react createElement calls to nest our content. 
+Indeed, nested content is pretty much always going to happen. And we can also include javascript functions inside JSX
+as well as long as those functions also return JSX. 
+
+The following defines a single-cell table using data from a javascript object called 'author' - note:
+- References to javascript objects and functions are included between curly braces inside JSX
+- Multiple elements can be included as the contents inside a createElement statement using a comma-seperated list
+- Indenting of nested createElement is deliberate to mimic the target HTML structure and increase readability
+
+JSX: <tr data-key={author.id}><td>{author.firstname} {author.lastname}</td></tr>
+JS:  React.createElement("tr", {data-key:author.id}, 
+         React.createElement("td",null, author.firstanme, " ", author.lastname))
+
+# Synhronising Data and View
+Keeping JavaScript and HTML synchronised is difficult because there is no explicit interface between the view layer
+and the logic / data layer in javascript. 
+HTML failures are generally silent and end up with strange looking views - but JSX can point you to issues during
+its transpiling. This helps with the debugging of the view layer design 
+This is part of the reason why we are ignoring the so-called 'seperation of concerns' where we try to abstract the view
+layer from the data layer - without an explicit interface directly entangling them offers us quite a lot of useability
+advantages. (Explicit interfaces are more like C# windows applications where everything is controlled within one language,
+unlike web which seperates HTML and JS). 
+
+# Virtual DOM
+The Virtual DOM is a key component of what makes React an efficient view rendering layer. The virtual DOM maintains a 
+snapshot of the current DOM - i.e. what is shown on the user's screen as rendered HTML. Whenever a change to the DOM is 
+requested using React.createElement or any other changes to elements, a difference is produced comparing the final state
+after the change to the initial state. Then React works out the most efficient method to update the actual DOM - the way
+to have minimal changes. For example when a single cell of data in a table is updated - some view frameworks will redraw 
+the entire table. React however can check using the virtual dom and so it can automatically work out only to redraw the 
+particular cell rather than the entire table. 
+
+The virtual DOM is also why JSX is transpiled to javascript functions rather than straight to HTML snippets - these 
+functions operate as making requests on the virtual DOM and leave it up to the virtual DOM to decide how best to action
+the request. 
+
+# Other React Advantages
+- We can improve performance even more by marking data which does not affect the DOM at all - shouldComponentUpdate
+- Immutable data copies can also be used for speed (data that cannot be modified)
+- Synthetic Events: React can also abstract away browser-specific event handlers with synthetic event handlers which 
+    don't need any modification for different browsers
+- Server-side rendering can be performed due to the virtual dom (isomorphic)
+- Virtual dom also gives us the potential for react native as we just need to translate the virtual dom into native mobile 
+    application components. 
+- JSX transpiler allows us to find issues straight away whereas HTML errors can fail silently and just cause weird behaviour. 
+
+# Install JSX plugin for visual studio code
+
+### REACT COMPONENTS ###
+See files for comments as well:
+A react compoment is essentially a class which contains a rendering function to return what to display on the screen for 
+this component. The nice thing about this pattern is that it allows us to combine our data storage and manipulation with 
+our display as well - like a regular class it can have member variables and functions in addition to the render function. 
+
+React compoments are created using the 'CommonJS' pattern - which is the standard node method of using 'require' and 
+module 'export' statements to export and import functions and classes. So every react script should import react for 
+starters, then we define a class using the React library, then we need to export our class from this file. 
+
+Typically we will have our main page which has a React component defined in the page to manage all the others and contain
+things like headers. In much of the following this component will be called 'App' - i.e. the basis of our web application
+which we will be plugging components in to as needed. 
+
+# Creating a component
+The render function needs to return a bunch of React statements / JSX. 
+
+var React = require('react')
+var MyComponent = React.createClass(
+    render: function() { return ( <div>Some text</div> ); }
+);
+module.exports = MyComponent;
+
+# Using a component: 
+To use a component we need to include it in to our main page and then place it into a container div (note that we do need
+a container div in our base HTML for a page).
+
+var MyComponent = require('/components/myComponent');
+
+React.render(< MyComponent />, document.findElementById("component-container") ); // Or use jQuery to find element to select
+
+# JSX Notes
+Multi-line JSX needs to be wrapped in parantheses. 
+JSX requires using "className" instead of "class" for styling because 'class' is reserved in javascript for delcaring 
+classes. We use className instead and the JSX transpiler converts this to a class for us. 
+
+# Navigating between components
+Realisitically for most applications we want to use proper routing library like React Router in order to manage Navigating
+between different components of our application. However it is possible to do routing natively. We can just define a containing
+component which uses the hash part of the route to determine which child component to load. See main.js for full details. 
+- Hash routes are URL paths after the hash: http://localhost:9080/#my/hash/path
+- We can extract the route from the javascript window object: "window.location.hash.substr(1)"
+- Pass variables to components using JSX to define them as component properties "React.render(<App route={route} />, $('#app') )"
+- Use these variables in components by accessing built-in properties object "var route = this.props.route;"
+- The 'render' function is a standard JS function, it can include logic and variables and manipulations before we finally call
+  the return with our JSX. This is especially useful combined with: 
+- Use JSX to include a dynamic object determined at run-time. In the following 'Child' is a variable which we dynamically 
+  choose which of our React components to fill with based on the current hash route (using 'require' to import our React 
+  components). This variable can be included in JSX - we just need to make sure it will evaluate properly at run-time:
+    render: function() {
+      var Child = HomePageComponent;
+      if (route == "About") Child = AboutPageComponent;
+      return ( <div> <Child/> </div> )
+    }
+
+# Immediately Invoked Function Expression (IIFE) 
+Use to contain stuff. For example jQuery is required to be global to use. This clashes with "use strict" interpretation 
+which doesn't allow globals. To ensure that "use strict" is not scoped to the entire file but only certain parts of it we 
+can wrap our strict code in an immediately invoked function expression. This is basically a means of running the same code
+we were going to but wrapping its scope by declaring the function then immediately running / invoking it. We also pass
+in the 'window' javascript variable although not entirely sure why this was necesary. 
+$ = jQuery = require('jquery')
+// Other require statements. 
+(function(win) {
+    "use strict"
+    // Content of our main file uses 'win' instead of 'window'
+}(window));
+
+# Header Navigation
+A centralised header is something we typically want in a react application - recall that these are generally single-page 
+applications which perform all navigation using hash URLs. This means that apparent navigation does not require entire page
+re-loads - we can keep header or navigation bar contents and just swap out certain components as the URL hash changes. To 
+build a navigation header then we create a common component in our base / main App component, and only swap out the others. 
+The header can be a quite simple component at a base level - just a bit of HTML (JSX) which includes hyperlinks to back to
+our site but with different hash URL components. The component switching is performed using the same logic described above. 
+Actually including the header on the page is as simple as putting it in our primary App JSX: 
+  <div>
+    <Header />
+    <Child />
+  </div>
+
+# File Naming Conventions
+Facebook includes 'react' in their file names to indicate with 
+If we do use jsx files we have to put the '.jsx' extension whenever we import a component with require:
+'require('./components/mycomponent.jsx') - this is because by default 'require' only expects to see .js files. 
+- MyComponent.react.js: clunky
+- MyComponent.jsx: makes it obvious that the file does include JSX
+- myComponent.js: 
+I think I'll use .js extension because its easier to be consistent that way. We don't want to accidentally label a file as 
+.js when it does contain javascript as that will just cause confusion. We just assume that any react-based application could 
+have .jsx in it anywhere. 
+
+# ES6 React
+ES6 introduced proper inheritance in object-oriented programming, with the ability to define classes as extending other classes.
+Extending React.Component is the way to declare a react component in ES6 rather than using React.createClass. There are some other
+differences in the use of React in ES6 as well:
+- ES6 uses the 'constructor' function (of OOP style) to initialise the component state, ES5 uses the 'getInitialState' function
+- propTypes and defaultProps for type validation and defaulting in ES6 are defined outside the class definition as new properties of 
+    the component class. ES5 by contrast includes them as properties inside the createClass function
+- Mixins are not supported in ES6 and caused issues with some code. Interestingly Facebook (creators and maintainers of React) 
+    recommend not to use mixins at all because of these issues and the lack of ES6 support
+
+
+### React Lifecycle ###
+Like many UI frameworks, React components have a lifecycle with callback functions defined for when they are about to be 
+attached to the DOM, after they have been attached, and when things change. The 'things' in particular that change are properties
+of the component. Properties here refer to some react-specific behaviour, so we'll go through that first before looking at the 
+lifecycle events. 
+
+# Props and State
+These are two ways that react components can store data, which are fundamentally different to each other. 
+- Props: injected into a component in a similar fashion as HTML attributes. Accessible by the component but Immutable. Data is
+    passed down from parent components through props. 
+- State: holds data for the component. It is essentially local storage for the component object. All data the component needs 
+    to store and modify should go in the state object 
+
+Initialising props and state - define the following functions as part of the react component declaration and in them 
+- getInitialState(): (different in ES6 - use constructor instead): should only be used by higher-level views / components in the 
+    heirarchy which are not receiving their data via props. Note this should not be used for initialisation of state e.g. by 
+    querying a server for data, it should be more like our empty default constructor setting default values for data
+- getDefaultProps(): (different in ES6 - use external function): used when a component should display some default data if no data
+    is supplied to it by a parent component. Similar to getting the initial state this is all about setting default values only. 
+
+Note how the combination of props and state allows for easy component re-use. We can have dumb child components with no logic in 
+them at all - just a view layer which places data to the screen. They get all their data from 'props' objects - the data is passed 
+down to them. A clever parent object can easily re-use the same component and just pass in different data for efficient code and 
+view re-use. We will discuss this more when we talk about controller views. 
+
+The following is an example of how props can be passed down to a child component  from the parent's state in this.state,  
+from a variable declared locally within the render function, or in the case of nested components we can keep passing properties 
+further down the view heirarchy by passing on properties of this component to the child component (which have come from higher up). 
+
+JSX used in parent component to pass properties in to a child component 
+    render:function() {
+        var value2 = "foo";
+        return ( <ChildComponent prop1={this.state.value1} prop2={value2} prop3={this.props.value3}> )
+    }
+Accessing the property values through the 'props' object of the child component. Notice how t
+    var MyComponent = React.createClass({
+        render: function() { return ( <div>{this.props.prop1} {this.props.prop2}</div>) }
+    });
+
+# Lifecycle functions 
+Lifecycle functions are pretty similar to many UI library implementations - these are callback functions which are run when something
+is about to happen to our view / component. Here are the main ones we are interested in (apart from the state and property related 
+ones previously discussed). 
+- componentWillMount: before initial render to DOM - use to set up initial state (e.g. to actually populate state data e.g. by 
+    making an API call out to a server, whereas we use getInitialState to just initialise variables to avoid errors)
+- componentDidMount: after rendering so the DOM exists for the component - now we can access the dom, use other frameworks, make 
+    ajax calls - we have something to return to now. 
+- componentWillReceiveProps: only runs when the component is receiving new / updated props. This allows us to update our internal 
+    state representation before the render occurs 
+- shouldComponentUpdate: run before rendering after new props or state. Allows us to say that the data changes do not require a call 
+    to 'render' because we know they have no UI impact. Skipping 'render' saves us some computation. Return true or false. 
+- componentWillUpdate: immediately before rendering when new props or state are incoming, allows preparation for update
+- componentDidUpdate: work with DOM after component updates - similar to componentDidMount
+- componentWillUnmount: component is about to be removed, release any data and do clean up, cancel timers. 
+
+If we want to edit the state during componentWillMount we need to use a function to do so - we cannot edit it directly:
+ this.setState(newStateObject)
+
+# Keys for dynamic components
+When we are dynamically creating multiple child components using JSX (such as adding rows to a table) we need to provide a key
+so that React can keep track of the different elements within its virtual DOM. The key must be unique for each child. 
+<tr key={author.id}>
+
+Note you can only have a single top-level component when declaring a return function in JSX, so typically if we want to have 
+multiple children within the component at the same level we need to wrap it in something like a div:
+<div>
+  <Component1 />
+  <Component2 />
+</div>
+
+We can put hard-coded data as a module export and require it in to other modules, and import either the whole object or select 
+parts of it as needed. 
+In file myData.js:  module.exports = { someKey: someValue }
+In another file:    var value = require('myData').someKey;
+
+
+### REACT COMPOSITION ###
+# Controller Views
+In React we like to talk about the concept of "controller views". These are not a controller in the typical model-view-
+controller sense because normal controllers are purely responsible for behind-the-scenes logic and data manipluation and 
+passing data to views, they have no display or view component themselves. 
+
+In React however what substitutes for 'controllers' is just high-level React components (higher in terms of view heirarchy). 
+The ease of composition of React components - where one component can contain multiple others, which themselves can contain
+more others in a continuing nested fashion, and the ownership chain where a parent can pass data down to its children 
+components and control its behaviour is part of React's power and scalability. However, including business logic or data 
+manipulation at many different levels in the component heirarchy can make it hard to debug when issues are occuring. 
+
+Technically a controller view is any view with child components, as it is responsible for controlling those children and their 
+data flows by setting props on those children. However more commonly it is a top-level component for a page / unit of 
+functionality which does the primary data retrieval (such as making API calls or querying from data stores) and manipulation. 
+While it still have a view component it is likely to be little more than a container for other components (wrapping them in 
+a <div> for example, or including a simple page header), where child components are dumb view layers which receive their data 
+from the controller via props. 
+
+So in this sense, a controller view is responsible for getting and maintaining data. While it is possible to have nested 
+controller views, it is not recommended as this may cause data update conflicts or redundant calls to 'render' which 
+impact performance. 
+
+Also state setting should occur in componentDidMount and we should check if the component is mounted first before making 
+calls to our data APIs. 
+
+# Property Validation
+Our dumb child views expect data to be passed down from parent components in order to have data to display. While we have the
+option to specify default properties to apply if the data is not available, we also have the ability to specify what properties
+are expected and required in terms of both property names and property types. 
+
+Interestingly, we can pass functions down as properties as well - as recall that JavaScript treats functinos as objects. 
+This is how we can supply callback functions to our dumb view layers to pass any user interactions back up to the controller
+view for handling. 
+
+To perform property validation we can define a propTypes variable:
+- Defining a propTypes variable as an object within our createClass statement (ES5) 
+- Setting MyComponent.propTypes object after class declaration (ES6)
+
+The propTypes object includes a list of named properties and a mapping to their data type and whether they are required or not 
+using React.PropTypes enumeration. An example propTypes could look like:
+  propTypes: {
+    authors:    React.PropTypes.array.isRequired,
+    onSave:     React.PropTypes.func.isRequired,
+    validate:   React.PropTypes.func.isRequired,
+    errors:     React.PropTypes.object,
+    hasErrors:  React.PropTypes.func.isRequired
+  }
+
+We can specify the following for each property:
+- What JavaScript data type we expect to receive: object, array, function, number, string or bool
+- Whether the property is required or not by adding 'isRequired' at the end of any required property
+
+When we 'require' a property unfortunately no errors will be thrown during linting but we will get a useful and descriptive 
+error message printed in our browser console on trying to view a page where a component has not been supplied all its required 
+properties, or properties of the wrong type. That is, this property validation only occurs at run-time but does help debugging
+by providing an informative error message in the browser console pointing us to the source of the problem. 
+
+If we don't define our propTypes and try to use a property in a component and it isn't present / value is null, then an error 
+message will still be output to the console but it will be much more cryptic and possibly source from inside React somewhere. 
+This error will still occur when prop type validation is occuring, but we will also get our more helpful error message as well. 
+
+NOTE: if we use minified React property validation will not be run. It is only run in non-minified versions of the library 
+because this is a development and debugging tool rather than a production test step (failing property validation will cause 
+crashing of our web app). By default NPM installs non-minified React which is great for debugging becasue we can see the React
+source and get our error messages. To install minified React in production we need to download a seperate minifed version
+
+NOTE: any field which is not listed as 'required' should have a default entry provided in getDefaultProps. This is because 
+every property we use should have some value so that errors don't occur when we try to use it. So we either require there to 
+be a value supplied by the parent, or we supply a default one that won't cause an error if the parent chooses not to supply
+that data. We supply default values for properties by:
+- Returning an object of property-value mappings from getDefaultProps function in createClass statement (ES5)
+- Setting MyComponent.defaultProps object after class declaration (ES6)
+
+# Mixins
+A property in react components which allows us to pull in code from other places. Probably best to avoid because apparently 
+there is not good support in ES6. Also I don't understand why you can't just define a helper library as a node module and 
+import functions from that to achieve similar code re-use. 
+
+
+### REACT ROUTER ###
+React has no opinion on how to perform routing. Routing libraries are good for allowing us to switch between multiple pages 
+containing different functionality. It is supported by facebook and apparently quite similar to how Ember behaves. 
+Turns out the version in the video < 1.0 has a lot of breaking changes introduced since 1.0 
+
+# Route Configuration
+Some easy things to to specify:
+- Routes mapping a path to an application page
+- Default route of a page to load when reaching the application root page
+- 404 route for a page to shown when the path is not found
+- Redirect routes that automatically take users from one path/route to another.  
+
+# Defining Routes
+The React-Router is specifically a routing solution for react because it acts like a React component and expects to load 
+other react components in performing its routing. Because it acts like a React componet, we handily do all our routing 
+configuration using JSX syntax and setting properties on our Routes just like normal react component properties. 
+
+There are a few specific components we want from the react-router package, like the 'DefaultRoute' and 'Route' components. 
+Note that we could also import them directly from the module rather than importing the whole module in one statement and then 
+taking pieces of it.  
+  var IndexRoute = require('react-router').IndexRoute;
+  var Route = require('react-router').Route;
+
+To define our routes, we specify JSX using our routing components and passing in the properties we want to set: 
+var routes = (
+    <Route name="app" path="/" handler={require('./components/app')}>
+        <IndexRoute handler={require('.copmonets/homePage')} />
+        <Route name="authors"   handler={require('./components/authors/authorPage')} />
+    </Route>
+);
+
+Properties which can be defined:
+- Path: the hash path to match against to show this route. 
+- Name: a name we can use to refer to this route programatically. Also used as the path if a path is not specified. (DEPRECATED)
+- Handler: a react component to respond to this path. We can just directly import our react components here 
+
+# Route Paths
+- All routes in react router go after the hash - so above defining a path of "/" is actually the root path after the hash and 
+    not before, i.e. the URL would be: "http://localhost:9080/#/"
+- IndexRoute is matched when a route has sub-paths but no sub-paths are specified
+- We can nest routes - nesting appends the route with a slash in between. e.g. "http://localhost:9080/#/authors"
+- Nested routes result in nested components. For the '/#/authors' path react router will place the authorPage component 
+    as a child component of app. Another level of nesting would place a dynamic child as the child component of authorPage. 
+    We just need to remember to include a reference to the dynamic child component somewhere in our JSX
+
+## BREAKING CHANGE NOTE 
+Breaking changes have been introduced in react router. "Router.run()" function no longer exists for attaching a set of routes 
+to a part of the DOM. The following documentation will describe how to use the newer version of react-router rather than 
+what is contained in the video tutorials. 
+
+Another breaking change - 'name' is no longer defined as a property of <route>, so it's only 'path' now. 
+
+Another breaking change - 'handler' is now called 'component' when specifying which react component handles the specified route
+
+Likewise React.render() no longer exists - it has been broken into ReactDOM.render() 
+
+# Replacing top-level 'App' Component
+To start with, if we have all our routes defined in a routes.js file, then in our main.js we import our routes component in 
+and render it in place of our top-level controller view. The heirarchy we define as part of our routing should remove the 
+need to control heirarchy within the app controller view, leaving the controller to be primarily data-focussed. We use the 
+'Router' as our top-level component now, and pass in a property of our full routes configuration. 
+
+## BREAKING CHANGE NOTE
+A method of specifying how to handle the browser history is also now a required part of the configuration.
+  var hashHistory = require('react-router').hashHistory;
+  var Router = require('react-router').Router; 
+  ReactDOM.render(<Router routes={require('routes.js')} history={hashHistory} />, document.findElementById('app'))
+
+# Using Route handling
+Now that we have defined our route-handling and applied it at the top level of our application we can make use of the route 
+handler in each of our components to dynamically include child components based on the hash path. Child components as selected 
+by the routing configuration are included in the 'children' property which is automatically injected into our component. 
+Render the child components by simply including the following line in the JSX for a component. React-router will automatically 
+work out where the current component is in both a view and route path heiarchy and supply appropriate child views:
+  return(
+    <div>
+      <h1>My Page Name</h1>
+      {this.props.children} 
+    </div>
+  );
+
+Note that we can easily show a default component when there are no children using a logical OR:
+{ this.props.children || MyDefaultComponent }
+
+
+# Params and Query Strings
+Complex applications use URL parameters and query strings as part of specifying what information to show on the page. Router
+handles all this nicely for us by adding path-related information into the component properties automatically. This includes 
+allowing us to specify named parameters as part of the URL, as well as including queries in the URL. The full path is also 
+included. All these are shown in the example below. 
+
+// Given a route like this with a placeholder route value
+<route path="/course/:courseName" handler={CourseComponent} />
+
+// And a URL like:
+'/course/clean-code?module=3'
+
+// Component properties will automatically be instantiated with all path-related data :
+var Course = React.createClass({
+    render: function() {
+        this.props.params.courseName; // "clean-code"
+        this.props.query.module;      // "3"
+        this.props.path;              // "/course/clean-code?module=3"
+    }
+});
+
+# Another way to ignore globals - mark a file with /*eslint-disable strict*/ to disable checking for 'use-strict' for a 
+single file. We can also disable eslint around specific lines of our code as well. 
+
+Usage note: routing is great for handling movement between pages. For controlling content in pages, it is still much better 
+to have a single top level controller view (selected by the router) which then passes data down to its child views directly 
+and explicitly. I was a bit concerned about how easy it was to pass properties through routing, but the idea is that you 
+shouldn't really be passing properties, you're loading up an independent page which at most the page controller view gets 
+some parameters from the URL, not the containing app, then passes data down to its child views. 
+
+# React Links
+React router gives us a more flexible tool that standard anchor '<a href="">' elements through Links. Using a link we can 
+define an element that looks and works exactly like a standard hyperlink, including picking up all the styling. However, 
+as 'name' parameter has been deprecated, we are no longer able to refer to routes by name and instead must hard-code our paths.
+This breaking change is under dev discussion but primarly encourages us to not change URLs, which is good practice (without 
+adding a redirect at least for user's old bookmarks). Consequently, we can also no longer pass in parameters when defining 
+a link, we just need to construct the URL with the parameters in it. 
+
+One small advantage of using links instead of <a> is for higher-level navigation buttons (e.g. tabs across the top or side of
+the page). Because links are part of react router, they know when they are active - i.e. when the user is on the page that 
+they point to. This allows us to easily apply an active styling to tabs or menu items - to make our current page stand out in 
+the menu set to tell our users where we are. Supply a value for activeClassName property in the link to point to a css class 
+which highlights the active link
+  <Link to="/" activeClassName="activeLink">Home</Link>
+
+Another advantage is that React-router knows we don't need to reload the entire page whenever we navigate back to our home 
+root path "/". Using hyperlinks to the root page causes a full page reload which can be slow for a large application. We 
+must use 'Link' instead of anchors to avoid the full page reload. 
+
+# IndexRoute 
+Replacement for the older DefaultRoute. Use to specify what should happen when we have a route with child paths but no child
+path is pecified at all. Not much more to it - just include the following route along with the other child routes:
+   <IndexRoute component={require('./components/homePage')} />
+
+# 404 / Not Found Page
+There used to be a specific NotFoundRoute react router component for handling the case of 404 - page not found, which is when
+the user enters a URL which does not match any of our route path rules. This component has now been removed, instead we just 
+define a route to match anything at the end of our file - catching everything which didn't match the rest. Put the following 
+line as the last child route to catch not-found paths. 
+  <Route path="*"         component={require('./components/notFoundPage')} />
+
+# Redirects
+These are pretty much as they sound, we have the possibility to automatically take users trying to get to one page to another 
+different page. All we need to specify is where they redirect from and to, and we can also pass along parameters in the URL 
+path as well. This is the preferred solution when changing URLs so that no-one's old links or bookmarks stop working (this 
+being preferred was the reason that 'name' was removed as an abstraction layer from the route configuration so we couldn't 
+easily switch our URLs and when we do to put redirects in place)
+  <Redirect from="profile/:userId" to="about/:userId" />
+
+# History
+Single page applications have a bit of a tricky relationship with browser history - since we're not really navigating around, 
+just dynamically switching page bits out based on whats at the end of our URL. As of more recent react-router implementations, 
+choosing a method for handling the history is now required. There are four available out of the box, although only the first
+two seem most useful as the others seem to be for custom use cases. 
+- browserHistory: a newer and more sophisticated library which requires HTML5 support (everything IE10+ and all others). This 
+    does not actually make use of hashes in its URLs, making much cleaner looking URLs both while the page is open and in the 
+    browser history. However there is a caveat for server implementation.
+- hashHistory: the older default, paths on an open page include hashes and paths in the URL history not only include the hash 
+    but an additional key field to tell React where the user is in a history stack. Generally uglier, but more broadly 
+    supported. 
+- createMemoryHistory: in-memory history object not so much useful for users, more testing or server-side stuff
+- useRouterHistory: allows use of other custom history tools 
+
+# Server-side redirects and browserHistory 
+browserHistory sounds like a nice option to have with its clean URLs, but the problem is that to the user, what used to be 
+http://localhost/#/about is now http://localhost/about. While this is all very well and good, from our web-servers point of 
+view (in our node-js configuration) these are actually two different endpoints. The hashes were always a good trick for a 
+single-page application because to a webserver, since the base URL path doesn't change, only the hash, they do look just like 
+only a single page is being loaded. But when we use HTML5 goodness to directly modfiy the user's browser paths and they then 
+try to load those paths from a bookmark or refresh the page, the web server is going to get a request for something which it 
+sees as an entirely different page to our application. From the web servers point of view, the application only exists on our 
+single index.html main page - any other path will return a web-server not found error, or something like "cannot GET /about"
+
+To address this if we are using browserHistory we need to introduce rules at the web-server level to redirect any unknown 
+paths (basically all paths) to our main index.html page, and then our single page application can grab the original path 
+and work out what it was supposed to show. 
+
+For defining our gulp-connect server for example, we can easily fix this by supplying a fallback - what to show when an 
+incoming request doesn't match anything. We just point the fallback to the base index.html which will load our entire application
+ connect.server({
+        root: ['dist'],
+        fallback: 'dist/index.html', 
+
+
+# Transitions 
+These have also been completely re-done. Wow I'm learning most of this from scratch. 
+Transitions are events which fire just before a component is about to change, both for when it is added and removed. This allows 
+us to apply conditional logic to see if we want to allow the change or not. Purpose of the two transition functions:
+- entering: called when routing wants to transition us to this component. A good time to check for authorisation on 
+    attempting to access a restricted route and redirect them to login / reject the request if unathenticated. 
+- exiting: called when routing wnats to transition away from thsi component. A good time to check for unsaved user 
+    input and prevent them leaving with an error message / prompt. 
+
+Implementation details are a bit messy: see the following react-router examples. Bascially we need to wrap our React components 
+in a react-router component called "withRouter" which I think embeds some router handling inside our component. Only dig 
+further into this if we actually need the functionality. 
+- entering: "auth-flow" example uses onEnter property in routing configuration to specify a function which can programatically 
+   redirect users e.g. if they are not authenticated to a login screen. 
+- exiting: "confirming-navigation" example uses a route leave hook to prevent users leaving with unsaved data (returning false 
+    to allow exit or returning a string to display as the confirmation message)
+
+
+# Programatic Navigation (Mixins deprecated)
+Mixins are basically a means to import a whole set of functions at once into one of our components (mixing in the functionality).
+The fact that they have been deprecated by ES6 means I think they are best left avoided and we just use helper libraries. The 
+functionality previously provided by the navigation mixin for react-router which allowed us to programatically control the 
+URL (redirecting users on drop-down changes for example rather than standard link clicks). If we are using browser history 
+then the simplest way is to just import browserHistory and call the push method with our new path. If we are not using browser
+history things get more complex so lets not do that. 
+  var browserHistory = require('react-router').browserHistory;
+  browserHistory.push('/new/path')
+
+# React Router Tutorial
+This extensively detailed tutorial could be helpful if we encounter any issues with react router. It is also much more up to 
+date with the current react router version. 
+https://css-tricks.com/learning-react-router/
+
+
+### REACT FORMS ###
+A lot of activities in a web-based application involve users interacting with data in forms. Working with forms in React has 
+some fun little quirks as a result of its focus on unidirectional data flows. 
+
+
