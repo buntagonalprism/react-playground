@@ -25,7 +25,7 @@ var config = {
         css: [                          // Retrieve css files
             'node_modules/bootstrap/dist/css/bootstrap.min.css',  // Bootstrap files are part of bootstrap node module
             'node_modules/bootstrap/dist/css/bootstrap-theme.min.css',
-
+            'node_modules/toastr/toastr.scss'
         ], 
         mainJs: './src/main.js',        // Javacript entry-point file, also used as starting point for browserify bundling
         dist:   './dist'                // File path to match the 'dist' directory for build process output
@@ -107,6 +107,8 @@ gulp.task('css', function() {
 // Tasks to use the gulp file system monitoring command - watch() to monitor a file pattern set of files
 // for changes, and when changes occur to execute a set of tasks identified by name
 // Note that we are not watching a directory here but an actual file search pattern which is kind of neat
+// NOTE: 'watch' only looks for changes to existing files, it will not pick up new files. Need to restart
+// to pull in new files. 
 gulp.task('watch', function() {
     gulp.watch(config.paths.html, ['html']);
     gulp.watch(config.paths.js, ['js', 'lint']);

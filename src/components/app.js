@@ -7,9 +7,6 @@ var RouteHandler = require('react-router').RouteHandler;
 
 var App = React.createClass({
     render: function() {
-        console.log("Look its working")
-        var Child;
-
         return (
             <div>
                 <Header/>

@@ -784,7 +784,227 @@ https://css-tricks.com/learning-react-router/
 
 
 ### REACT FORMS ###
+This section will not introduce many new react or react router concepts, instead it will demonstrate good use case and design 
+patterns implementing what we've covered so far by showing how to create forms which can be used to display and maniuplate data. 
+
 A lot of activities in a web-based application involve users interacting with data in forms. Working with forms in React has 
-some fun little quirks as a result of its focus on unidirectional data flows. 
+some fun little quirks as a result of its focus on unidirectional data flows. But the first step to working with forms is to 
+follow the pattern of using controller views we've talked about in React composition to have a containing controller view 
+with all the logic and a dumb child component containing all the usual HTML form markup. Note the following react-specific html 
+attributes we have to observe:
+- htmlFor: used instead of normal 'for' attribute to allow labels to indicate what they are labelling
+- className: already seen, used instead of normal 'class' attribute to specify CSS classes
+- ref: special callback function called by react when a component (including a native html component like <input>) is mounted or
+    unmounted from the DOM, allowing us to get a direct handle to the actual DOM element (as opposed to virtual DOM). Making use 
+    of this attribute however breaks the pattern of data ownership React encourages. 
+
+# Change Handlers
+The first weird thing you notice on trying to implement a form in React is that you can't type in any of the input text boxes. Key 
+presses just don't seem to do anything. This is because of React's uni-directional data flows. Basically, typing on the keyboard is 
+a view input, and there is no automatic binding to allow view changes to update the virtual DOM, which in turn updates the actual 
+DOM to show the typed letters on screen. Bascially user input is being ignored because we haven't defined a function to handle it. 
+
+We need to handle this in the controller view by creating an on change handler which we supply to our child view to call on key-
+presses. 
+The data flow just for typing now becomes a little complex:
+- Child component fires the onChange when user presses key
+- Parent component receives the event and retrieves the new value
+- Parent component updates its state with the new value
+- Child component recieves the updated state and renders, drawing the new character to the screen
+
+Some notes on this process:
+- Updating state in a parent component automatically pushes through to props in the child component if we have passed in any state
+- Updating props in child component automatically calls 'render'; unless we return false to should component update
+- To make field handling easier, we should match the 'name' attribute of our input fields to the keys in data objects we supply. 
+     This means our event handling can be more generic - we can get the name of the field which is firing the event and use that 
+     name as the key to update our data model directly without having to lookup a name to data field mapping 
+     i.e. the <input name="myFieldName" value={this.props.[someobject.]myFieldName}
+
+# Reusable Inputs
+When creating forms, especially forms with styling such as with bootstrap, we can end up with quite complex HTML / JSX layouts in 
+our dumb child view component classes. And if we want to maintain a consistent look and feel across our application we have to be 
+careful that we apply the same styling and layout everywhere we use the same type of input (e.g. text, checkbox, button). For both 
+consistency and simlicity therefore, it is advantageous to create resuable input components - very low level React components which 
+are basically a wrapper around a native HTML element but giving us the ability to define a consistent style and behaviour. Re-using 
+this component makes it easy to have a single UI appearance everywhere and also reduces duplicated code in our layouts. 
+
+Prepare for a lot of code, but that just gets the point across, the following is a nice resuable text input which makes use of 
+bootstrap div-wrappers and classes for styling while also providing the option to supply an error message to display. By 
+dynamically setting the class of our div wrapper, we can add in the bootstrap 'has-error' class when there is an error string 
+defined, so that we can highlight the field to draw user attention to it. Using this in a React component class gives us this 
+functionality everywhere with a consistent style, and all we need to specify are the properties we want to supply. And we even 
+back-up those properties with proptypes to make sure people use our component in the right way. 
+
+var Input = React.createClass({
+    propTypes: {
+        name: React.PropTypes.string.isRequired,
+        label: React.PropTypes.string.isRequired,
+        onChange: React.PropTypes.func.isRequired,
+        placeholder: React.PropTypes.string,
+        value: React.PropTypes.string,
+        error: React.PropTypes.string
+    },
+    render: function() {
+        var wrapperClass = 'form-group';
+        if (this.props.error && this.props.error.length > 0) {
+            wrapperClass += " " + 'has-error';
+        }
+        return (
+            <div className={wrapperClass}>
+                <label htmlFor={this.props.name}>{this.props.name}</label>
+                <div className="field">
+                    <input type="text"
+                        name={this.props.name}
+                        className="form-control"
+                        placeholder={this.props.placeholder}
+                        ref={this.props.name}
+                        value={this.props.value}
+                        onChange={this.props.onChange} />
+                    <div className="input">{this.props.error}</div>
+                </div>
+            </div>
+        )
+    }
+});
+
+# Handling Submit Buttons
+Only two things really needed here, define an onClick event handler for our submit button, (passed down from the parent 
+controller view of course), and in that event handler we need to cancel the default submit action which tries to post data and 
+load a new page, or reload. 
+
+// Submit button onClick handler must prevent the default form submit behaviour. 
+saveAuthor: function(event) {
+    event.preventDefault(); // Stops submit button from actually calling submit and reloading page
+    AuthorApi.saveAuthor(this.state.author);
+},
+
+// saveAuthor was supplied to onSave property of this child component for use here
+<input type="submit" value="Save" className="btn btn-default" onClick={this.props.onSave}/>
+
+# Programatic Redirects
+So this was one of the breaking changes which we skipped over the details of earlier. Here are the full guts
+1. Preferred - get a reference to the browserHistory object (singleton instance across application by design) and push the 
+new path we want on to that. 
+  var browserHistory = require('react-router').browserHistory; 
+  ...
+  handleSubmit(event) {
+    const path = `/repos/${userName}/${repo}`
+    browserHistory.push(path);
+  },
+
+2. Only if not using browserHistory for history management (this might be deprecated)
+  // In our class definition ask for `router` from context by defining contextTypes array of required context input
+  contextTypes: {
+    router: React.PropTypes.object
+  },
+  // In our submit event, retrieve the router object from the context and set a new path programmatically
+  handleSubmit(event) { // do stuff then...
+    this.context.router.push(path)
+  },
+
+# Notifications with Toast
+When we programatically redirect its nice to supply some user feedback that things are working as expected (or not). For this 
+purpose we will use the library 'toastr' to supply 'toast' messages rather like Android toasts. Requires a javascript library 
+and css (both contained in node-modules folder). Just like with bootstrap, we need to edit our gulpfile.js to include the css 
+for toastr into our distribution directory from node-modules. 
+
+The result is a nice little pop-up window in the top-right of the page
+
+toastr.success('Success message'); 
+toastr.error('Something went wrong'); 
+
+# Input Validation
+Very important. Best way to do it is to run a valiation function when the user tries to hit 'save' or submit or whatever. Then 
+using an input with a bootstrap styled error all we need to do is set the 'error' text on our field to have it show up and the 
+field automatically change to shwoing an error message. And of course we abort the progrmatic transition to another page. 
+
+// Validate inputs by testing controller view state (recall current input values will be captured in controller state thanks 
+// to the onChange handler. As long as we pass errors down to child components, they will automatically show when they exist
+authorFormIsValid: function() {
+    var formIsValid = true;
+    this.state.errors = {};  // Clear any current errors 
+
+    if (this.state.author.firstName.length < 3) {
+        this.state.errors.firstName = "First name must be at least three characters";
+        formIsValid = false;
+    }
+    this.setState({errors: this.state.errors}); // Only updates 'errors' part of state, not entire state
+    return formIsValid;
+},
+// Use the validation function in the onClick handler to determine whether to proceed or not. 
+saveAuthor: function(event) {
+    event.preventDefault(); // Stops submit button from actually calling submit and reloading page
+    
+    if (!this.authorFormIsValid()) {
+        return;
+    }
 
 
+# Setting State
+
+# Transition Handlers
+This was another of the breaking changes, and we'll dig into the detail again here. 
+
+To prevent a transition away from a component, we need to get a reference to the React-router 'router' object. We might be able 
+to get this from the context, or that method might have been deprecated. The recommended way to get it is to wrap our React 
+component in a higher-order component (HOC) which injects the router object. Inside our wrapper we have access to the router 
+under this.props.router, the current route under this.props.route, and we can set an exit transition listener using the 
+setRouteLeaveHook function. If the method we supply to this function returns a string, that is shown in a confirmation message 
+to the user. 
+
+var withRouter = require('react-router').withRouter;
+var MyComponent = withRouter( 
+  React.createClass({ ... as usual ...
+    componentWillMount: function() {
+      this.props.router.setRouteLeaveHook(
+        this.props.route,
+        this.routerWillLeave
+      )
+    },
+    routerWillLeave: function() {
+      if (this.state.textValue)
+        return 'You have unsaved information, are you sure you want to leave this page?'
+    },
+  
+  }) );
+
+Note that we should track whether there is any  user-input to save using a variable tracking whether the form is in a 'dirty' 
+state - i.e. there are changes that have not been saved. Lifecycle of dirty flag and validation:
+- Set dirty flag to false (clean) as state variable in getInitialState
+- Set dirty flag to true on any user input (e.g. change handler)
+- Check dirty flag in route leave hook and prompt with message if dirty 
+- Set flag to clean if save is successful (in case our workflow allows them to keep working on the page rather than redirecting)
+
+# Setting State
+When we call 'setState' it only updates the state objects we directly reference in that call. Other objects contained in the 
+state are not touched - it doesn't replace the entire state each time we call setState(), only the objects referenced.
+
+So for example we can call this.setState({dirty: true}) directly just to update the 'dirty' parameter of state and leave any 
+other data attributes untouched. Note this method of calling setState directly passing in data without first temporarly setting 
+local state. 
+
+The temporary state method instead looks like: 
+this.state.dirty = true; this.setState({ dirty: this.state.dirty});
+For a simple object like this there isn't much benefit, but for more complex state objects this workflow is much better as it:
+1. Allows us to have a scratchpad style area to work our state changes in before we finally commit those changes using setState,
+2. Allows us to modify only small parts of complex state objects - e.g. setting single attributes in the existing object while 
+     keeping other values and not needing a copy of the state to play with
+Don't forget we always need saveState!
+
+This is handy as it helps React work out which child componets might need a call to render - only the components who have been 
+passed the state that has been updated might need a render, other components using other bits of state can stay as they are.  
+
+
+# Filling a form based on URL (form hydration)
+This isn't too tricky - we just need to get whatever is in our URL and use that logic to fill our child views with data 
+accordingly - e.g. if there is no ID we can create a new object, or if there is an ID we can attempt to load the data for that 
+ID or display an error message, or redirect to a list of valid entities? Stuff like that.  
+
+Do form hydration in componentWillMount - allows us to call 'setState' when we load our data before rendering has occured, 
+therefore skipping a double-render (which would happen if we loaded after rendering). 
+
+Access parameters from the URL: 
+// In routes
+<Route path="path/:myparam" component={require('./components/myfolder/myComponent')} />
+// In component
+var paramValue = this.props.params.myparam;
