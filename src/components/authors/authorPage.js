@@ -2,22 +2,36 @@
 
 var React = require('react');
 var Link = require('react-router').Link;
-var AuthorApi = require('../../api/authorApi');
+var AuthorStore = require('../../stores/authorStore');
 var AuthorList = require('./authorList.js');
+var AuthorActions = require('../../actions/authorActions');
 
 var AuthorPage = React.createClass({
 
     getInitialState: function() {
         return {
-            authors: []
+            authors: AuthorStore.getAllAuthors()
         }
     },
 
     // Set state once component is mounted
-    componentDidMount: function() {
-        if (this.isMounted()) {
-            this.setState({ authors: AuthorApi.getAllAuthors() });
-        }
+    // componentDidMount: function() {
+    //     if (this.isMounted()) {
+    //         this.setState({ authors: AuthorStore.getAllAuthors() });
+    //     }
+    // },
+
+    // Hook into store change events 
+    componentWillMount: function() {
+        AuthorStore.addChangeListener(this._onChange);
+    },
+
+    componentWillUnmount: function() {
+        AuthorStore.removeChangeListener(this._onChange);
+    },
+    // When author data changes, get data set again 
+    _onChange: function() {
+        this.setState({authors: AuthorStore.getAllAuthors() });
     },
 
     render:function() {

@@ -1008,3 +1008,374 @@ Access parameters from the URL:
 <Route path="path/:myparam" component={require('./components/myfolder/myComponent')} />
 // In component
 var paramValue = this.props.params.myparam;
+
+### FLUX ### 
+Used for handling data flows throughout an application. It is not actually a framework, just a pattern for uni-directional data 
+flows. There are mnay implementations of the flux architecture, including Facebook's flux (work's nicely given facebook created 
+React), but others include Reflux, Flummox, Delorean (flux capacitor geddit), Fluxbile and others. 
+
+We're going to use Facebook's flux due to its support and proven usabiilty. However there may be more boilerplate in this 
+implementation, so we may want to look at other libraries for a bit less code at the expense of more configurability perhaps. 
+
+Two way binding: 
+- Type in a text-box, data behind the scenes changes immediately. 
+- Simpler conceptually, less framework, more restrictive for large applications of interconnected components
+
+Flux one-way binding: 
+- Action occurs
+- Dispatcher receives this action and notifies stores registered with dispatcher
+- Store recieves action payload and updates its data 
+- View is updated when corresponding store updates
+- View can fire actions to complete the data loop
+
+Compare how two way binding allows views to update state, whereas one-way binding fires off actions which may eventually update 
+state. 
+
+React and Flux is very different to MVC. 
+
+There are the three key comopnents to flux 
+- Actions: user interactions and events occuring in react components in our application - e.g. clicking a button 
+- Dispatcher: singleton registry - a complete list of callbacks to fire in response to actions
+- Stores: hold app state / data. When stores change, we expect views to change
+
+# Actions 
+Basically events. Can be triggered by user interactions with the application or by the server (e.g. when there is new data 
+available) 
+ActionCreators are functions which fire actions and send them to the centralised dispatcher - these are the functions which 
+trigger actions. Each action requires a type so the dispatcher knows how to handle it - what callbacks to fire. 
+Action payloads include:
+ - 'type' field describing the type 
+ - 'data' field including any associated data. 
+
+# Dispatcher 
+Central hub / singleton / there's only one per app. It is also called 'centralised' dispatcher. 
+Stores register with dispatcher to be notified when data changes - basically dispatcher holds a list of callbacks. 
+Payload (both 'type' and 'data' attributes of action) is broadcast to all registered callbacks
+Allows multiple components / stores to react to the same data changing. 
+Constants file: helps keep things organised by defining constants used throughout the system, while also providing a helpful 
+summary of what our app actually does (be interesting to see this in practice cause I'm not sure what this means). Might be 
+a list of constants defining things like keys for actions. 
+
+# Stores
+Hold app state, logic and data retrieval methods. However it is not actually a data model - it contains data models. And there 
+may be one or many stores within a single application. Stores must register their callbacks with the dispatcher in order to 
+receive relevant actions. Note that React components cannot register callbacks with the dispatcher directly - they have to 
+go through stores. 
+Stores use the Node.JS event emitter - allows for the binding between stores and react components. The stores emit data changes 
+using the event emitter, and view components listen to that to figure out when to update with new data. 
+Data cannot be updated directly in any way - it can only be updated through callbacks fired by the dispatcher receiving actions. 
+
+Stores require us to implement the following interface: 
+1. Extend EventEmitter 
+2. addChangeListener and removeChangeListener: select which react components should know when the store changes
+3. emitChange: actually fire a change event to push to listening components
+
+Hmm this is interesting, it seems our store actually defines what components are going to listen to it, and then pushes messages 
+out to those components. 
+
+Stores need to look at the 'type' attribute of the dispatched payload to determine how to handle the new data - most stores will 
+be registered to multiple actions after all. 
+
+Nicely, when we have dependant stores (stores which use data from other stores) we can update stores sequentially by using the 
+dispatcher to invoke the callbacks to each store in a set order, allowing one to complete before starting the next. These kinds 
+of complex scenarios are what the one-way binding is great for. (Called the wait-for API in flux)
+
+# Controller Views 
+We've talked about how React has the concept of a controller view as a top-level component. When using Flux, the controller views
+aka top level components should be what interacts with stores. As the controller views retrieve data they store it internally 
+in state and pass necessary data down to child views via properties to display.  Note that it is recommended to pass down 
+objects of data to children rather than individual fields (within reason) as this can make things more flexible if data fields 
+change in the future - we only need to update the child views to consume the new fields, the parent just passes it down and 
+doesn't need to know th edetails of what's inside. 
+
+# Full Flux flow
+1. Action occurs 
+2. Action payload sent to dispatcher with type and data using action creator
+3. Dispatcher looks up callbacks registered to the action type
+4. Payload is broadcast to all registered stores 
+5. Stores receive and process the action / data and save it internally 
+6. Store emits a change event 
+7. React component recieves the event and re-renders with new data 
+8. Component can fire new actions to complete the loop
+
+Actions can also make web api calls and vice versa? Hmm Actions might be 
+
+# Flux API Basics
+- register: store specify a callback to run when an action occurs 
+- unregister: store stops listening to an action 
+- waitFor: allows callbacks to be run in a specific order 
+- dispatch: fires an action 
+- isDispatching: returns whether dispatch is currently dispatching (checking for busy state or something?)
+
+### FLUX IN PRACTICE ###
+Facebook's flux implementation is contained in npm package called 'flux'. A few things we want to do
+
+# Actions 
+- Create a 'constants' folder to contain definitions of constants 
+- Define a file in this folder 'actionTypes.js' to contain the set of all available action types
+- Import keyMirror "require('keymirror');" (previously from react library, must have broken out) - allows for more enum-style 
+    declaration of constants - we need to map export an object containing all of our action types, but javascript doesn't natively
+    support enumerations so we delcare an object containing key-value pairs. keyMirror copies keys into the values so we define 
+    a list of action names (without quotes even) and then we can use the constants straight from importing the module
+// Declare constants 
+var keyMirror = require('react/lib/keyMirror');
+module.exports = keyMirror({
+    CREATE_AUTHOR: null 
+}); // Becomes { CREATE_AUTHOR: "CREATE_AUTHOR"}
+// Use constants 
+var ActionTypes = require('actionTypes');
+var type = ActionTypes.CREATE_AUTHOR;
+- Create an 'actions' folder to contain action creators. These are not special functions, just helper functions that we put in a 
+    commonly accessible location which we use to dispatch actions and do other processing
+- Dispatching an action only requires a call to dispatcher.dispatch({actionType: "type", [data key-value pairs]}). If the 
+    entire application existed client-side, then whenever a user performs an event (just avoiding saying 'action' there) we 
+    would probably just want to dispatch an action straight away to update our views. But most web applications have a server 
+    back-end which needs to be kept in sync. The action creator helper functions are a good pattern because they allow us to 
+    do things like push data to the server first, confirm we have a response, and then we can dispatch an action when we know 
+    the data has been committed. 
+- The action creators are just helper functions which abstract away interactions with the dispatcher as well as interactions 
+    with server-side or other backends. The view does not need to know about action types, the dispatcher, or the backend, 
+    it just needs to call the helper function with the right data. 
+var AuthorActions = {
+  createAuthor: function(author) {                  // So-called 'action creator' helper function 
+    var newAuthor = AuthorApi.saveAuthor(author);   // Make a call to backend. If asycnhronous wait for callback to dispatch
+    Dispatcher.dispatch({                           // This is the actual action object being dispatched
+        actionType: ActionTypes.CREATE_AUTHOR,
+        author: newAuthor
+    })
+  }
+}
+
+- Views can call the action creators as a shortcut to pushing data to servers and sending to the dispatcher
+
+# Dispatcher 
+- Create a dispatcher - create dispatcher folder then perhaps an appDispatcher.js file. All it needs is to instantiate an 
+    instance of the dispatcher and then we can import it in everywhere we need it 
+// Import native facebook flux dispatcher
+var Dispatcher = require('flux').Dispatcher;
+module.exports = new Dispatcher();
+
+
+# Stores 
+Create 'stores' folder, then create store files for different data types 'mydataStore.js'. We need our store to be an event 
+emitter, so we basically need to extend the standard event emitter class with our store. Not the easist in javascript, so we 
+need to use the object-assign library to bind the event emitter in. object-assign is actually native to ES-6, we can use the 
+npm object-assign library to bring the same functionality to ES5. Specifically we want the 'on', 'emit' and 'removeListener' 
+functions of an event emitter, to register callbacks for events, fire events, and remove callbacks respectively. 
+
+Now here's another important point. The store doesn't know which comopnents depend on it for data. That's what the add and remove 
+change listener functions are for - our controller view components basically subscribe to stores they want to get data from 
+and supply a callback to call when that occurs. 
+
+'addChangeListener', 'removeChangeListener' are I think arbitrary names - these are functions used by components to register and 
+de-register themselves. 
+
+Also importantly the dispatcher dispatches to all stores at the same time, and it is up to the store to actually check whether it 
+is interested in the action type or not - the dispatcher does not manage a mapping between stores and actions. 
+
+Basic Boilerplate for any store: 
+
+var Dispatcher = require('../dispatcher/appDispatcher');
+var ActionTypes = require('../constants/actionTypes');
+var EventEmitter = require('events').EventEmitter; 
+var assign = require('object-assign');
+
+var CHANGE_EVENT = 'change';
+
+// Start with an empty object. Add in event emitter prototype, then add in the rest of our store logic. 
+var AuthorStore = assign({}, EventEmitter.prototype, {
+    // Simple wrapper functions around the event emitter methods for simplicity - could be named other things 
+    addChangeListener: function(callback) {  // Components register a function to listen in on store data changes 
+        this.on(CHANGE_EVENT, callback);
+    }, 
+    removeChangeListener: function(callback) { // Component no longer wants to receive data changes (probably un-mounted)
+        this.removeListener(CHANGE_EVENT, callback);
+    },
+    emitChange: function() { // Internal function to call all our registered event listeners to notify components
+        this.emit(CHANGE_EVENT);
+    }
+
+});
+
+// Every store receives every action - we need to handle the type of action to determine whether we process it
+// Private implementation detail - not part of public API
+// Run when this module is first loaded
+Dispatcher.register(function(action) {
+    switch(action.actionType) {
+
+    }
+});
+
+module.exports = AuthorStore;
+
+So, here's a more practical data workflow summary
+- Actions can be dispatched from anywhere - just need a reference to the dispatcher
+- Better to use action creater / helper functions so view components can just reference that without knowledge of the dispatcher 
+or of action types. Action creator functions are also a good place to push / pull data to and from back-end systems 
+- When a store is first imported it will be run, and at that time it will register a callback with the dispatcher 
+- Whenever the dispatcher receives an action, it will dispatch the payload to the supplied callback method of all registered stores
+- During component initialisation controller views need to register which data stores they want to listen to change events on, 
+supplying a callback to the store 
+- Stores need to check the action type and notify registered views when data changes by emitting an event
+- Views need to handle the callback by updating state / child view properties to re-render and display data. 
+
+So this data model means data is essentially stored in three places: 
+- Server back-end
+- Store private data 
+- Component state (also private)
+The point of the store is that it is a common local copy of data - common between multiple components. Components require private 
+state in order to function, but the store allows them to share data. These copies seem redundant, but by implementing everything 
+correctly we ensure changes are pushed out and things can't get out of sync because our view pushes data changes right back up 
+at the top - writing changes to the server through our action helpers. This then trickles down to the store through the dispatcher 
+and finally ends up back at the views through event emitter. But along the way of this data flow, other components using the 
+same data we have just edited will also receive a fresh copy, and the server does too. So it was a long route to update just 
+ourselves, but in a complex application we actually have a lot of power to keep everything else in sync using this data flow. 
+
+So we can see it really is just a pattern - the dispatcher is little more than a fancy broadcaster, and stores are a bit of 
+private data with a broadcaster. But following this pattern, although a little more hassel at first, is really scalable to 
+complex applications. 'Actions' are not even particularly well-defined, the dispatcher just sends an object to everything 
+listening - the 'actionType' paramter and any data in the payload is entirely defined by us for the convenience of handling 
+which messages were intended for whom. Likewise there's nothing particularly special about stores, they are just a javascript 
+object which we give functions for to act in the manner of the store. 
+
+# Store private data 
+The store needs to contain data in private variables. Some notes: 
+- Name our private data variables with an underscore prefix to indicate that it is private 
+- Declare in the root of the store javascript file but do not export so that it stays private to the file / module (i.e. the store)
+
+Stores need getter methods - get all objects and get objects by ID - these will be required by components as they initialise to 
+get a first copy of data. Then they can register to recieve change events with the store and receive subsequent data updates 
+through the events emitted by the store. 
+
+Setter methods should not exist - nothing should be able to edit data in the store, the only way the store's data changes is 
+through actions it receives. The store manages its own data. 
+
+For every action type handled by a store, the store should emit a change event to notify listening view components. 
+
+# setState is asynchronous 
+So got a weird issue - setting state is asynchronous, and we are actually managing to navigate away from the page before the 
+state has completed setting. This means the 'dirty' flag stays true so the user gets prompted if they want to return even after 
+hitting the save button. Hmm some other people have complained about this actually - its a little sneaky. We can get around it 
+by supplying a callback function which will be called when the state change has occured. 
+
+# Initialising Components from Stores
+Because we can rely upon data in a store either being empty or valid, components can query the store in getInitialState to get 
+valid data - they don't need to initialise it first and then query for data during componentDidMount or another lifecycle method
+
+So in the component initialisation they should both attach themselves to the store to listen to changes, and query the store for 
+an initial set of data (using register-listener and getter methods respectively, both of which should be provided by the store)
+
+# Initialising Data in Stores 
+While we've hooked up stores to receive data changes, we also need to populate the stores. The stores are not responsible for 
+querying our server for data - our pattern dictates that stores should just receive data through actions. The solution here 
+is to create an initialise action, and have an action creator helper function which does our API calls to retreive data just 
+like we have action helper functions to push data to the server. Except these initialisation actions we define will not be 
+run as the result of user activity, instead they will be run automatically on application load by placing them in main.js So: 
+
+// Define an initialise action which loads data from our API and then 
+var InitialiseAction = {
+    initApp: function() {
+        Dispatcher.dispatch({
+            actionType: ActionTypes.INITIALISE, 
+            initialData: {
+                authors: AuthorApi.getAllAuthors()
+            }
+        })
+
+// Fire the action during app start-up (bootstraping?) in main.js 
+var InitialiseActions = require('./actions/initialiseActions');
+InitialiseActions.initApp(); 
+
+// Listen for the initialise method in stores registered dispatcher callback  
+Dispatcher.register(function(action) {
+    switch(action.actionType) {
+        case ActionTypes.INITIALISE: 
+            _authors = action.initialData.authors;
+
+# Store File Loading 
+An interesting note on file loading - main.js should be the entry point of our application. At first it seemed to me that trying 
+to fire an action whcih is supposed to be received by the stores wouldn't go anywhere, because the javascript modules 
+containing the stores wouldn't have been loaded and so the stores wouldn't have hooked in to the dispatcher. But here's an 
+interesting thing. Main.js imports our 'routes' configuration to specify which paths go where using React router. And the 
+routes configuration imports all of our controller view react components to specify as component handlers for route paths. And 
+Those controllers views are what interact with the stores - so they are going to import and therefore initialise the stores. 
+The only stores which won't get initialised are those that are never referenced by a controller view component or stores 
+referenced by controller view components which have no routes to them. Either way, the store is not actually needed. 
+
+# Updating Data in stores
+It can be advantageous to have seperate actions for creating and updating the same types of data if we need to handle the 
+behaviour differently. However this does mean we require switching logic in components which can be used for both data 
+creation and update, the comopnent needs to use the right action. 
+
+# Copies of data by reference?
+So somehow the data retrieved from the store is a reference rather than a copy which means that if we modify the data in any 
+component the store data also changes? That's slightly mortifying. One solution is to return a copy of the data rather than 
+the data itself. Hmm this really does bother me a little. The value will actually be changing in other components that show the 
+same data. Hmm, but you know - it might actually not affect them. Because of the virtual dom - changes incurred through these 
+fields changing through common references won't cause a call to render as they won't be enqued into the state. But another 
+call to render might pick up the new value... Okay well the solution to this is if we get an issue 
+- If there is an issue where component initialisation getting references to store data causes data polution between views 
+- Return deep copies of data from the store rather than references to avoid the issue
+- One way to perform a deep copy is convert to JSON string then back with JSON.parse(JSON.stringify(myObject))
+
+And you know what- maybe its okay that our view components keep themselves in sync in this manner - keeps visual consistency. 
+The nice thing about the store I suppose is that it persists, so if we are swapping components which need the same data, we don't 
+need to make any more calls out to our web service, our data is stored locally in a common place for all to access. I suppose 
+it would be pretty rare to have multiple components on the same page consuming the same data, but we can certainly have the 
+different components on different pages using the same data so there's no need to be making web calls each time. 
+
+MAJOR DOWNSIDE: you don't have to hit 'save' for changes to be pushed back to the store - they will do that automatically as a 
+result of getting by reference. So if you open an author for editing, type in the fields, then exit without saving, that data 
+will now persist elsewhere in the application BUT NOT BE ON THE SERVER. It has been updated through the reference into the 
+store and other components will therefore show that data, but no action pushed it to the server. I think it would be nice to 
+find a flux implementation that took care of this issue TBH
+
+'Alt' is an implementation which came up in my searches as returning a copy of state rather than a reference to address this 
+issue. It also won at least one shootout with 13 other flux implementations for speed, widespread use, support and functionality. 
+
+# Components Listening to Stores 
+Components supply a callback to the store to run when data changes, but this is typically more a notification callback rather 
+than a data callback. That is, the updated data is ususally not passed through the callback - it is a no-paramter function. 
+However, when the callback executes in the component, that is the chance for the componet to go fetch data again from the store. 
+So its not a push model of the data on update - its a push notification from the store to the component, and then a pull of data. 
+It just feels more and more manual the more I see... but the logic seems good I suppose. Example code: 
+
+// Hook into store change events 
+componentWillMount: function() {
+    AuthorStore.addChangeListener(this._onChange);
+},
+componentWillUnount: function() {
+    AuthorStore.removeChangeListener(this._onChange);
+},
+// When author data changes, get data set again 
+_onChange: function() {
+    this.setState({authors: AuthorStore.getAllAuthors() });
+},
+
+# Javascript Method Binding
+Javascript method bind - 'myFunc.bind(obj, params...)' creates a new function which will be called with whatever parameters we 
+supply but inside the function 'this' will refer to the same 'this' as it did when we called bind. This is useful for managing 
+context. Related to button presses on React components - 'this' in click handlers will refer to the actual DOM element clicked 
+(button, link etc) and not the containing react component which is what we probably want. Therefore in our click handler 
+we should bind our context into the click handler function. 
+<a href="#" onClick={this.deleteAuthor.bind(this, author.id)}>Delete</a>
+
+# Asychronous Web Calls loading screens 
+A nice thing about actions and our dispatcher - we have a convinent way to show a loading wheel or something while an 
+asynchronous call is occuring. We fire an action when the call to our web service first starts so that our views can show a 
+loading thingy. Then when the call finishes we fire another event with the new data, and the view can update data and remove 
+the loading screen (although this is going through stores somehow? Maybe they set a loading flag for the data to pass that info 
+along to the views). 
+
+# Deleting from arrays and other lodash goodness
+When deleting a copy of data in our store we might be deleting an object in an array. For this we want to find an object. 
+The lodash library remove function could help here: 
+_.remove(_authors, function(author) {
+    return action.id === author.id;
+});
+We can also find an object by a property, or get the index of an object known to be in an array
+_.find(_authors,{id: action.author.id});
+_.indexOf(_authors, existingAuthor);
+And splice an object into an array (native javascript): Removes existing from a position and inserts new objects into array 
+array.splice(startingFromIdx, countToRemove, itemsToAdd...)
+to replace an item, countToRemove = 1

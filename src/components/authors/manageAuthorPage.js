@@ -2,7 +2,8 @@
 
  var React = require('react');
  var AuthorForm = require('./authorForm');
- var AuthorApi = require('../../api/authorApi');
+ var AuthorStore = require('../../stores/authorStore');
+ var AuthorActions = require('../../actions/authorActions');
  var browserHistory = require('react-router').browserHistory;
  var toastr = require('toastr');
  var withRouter = require('react-router').withRouter;
@@ -25,7 +26,7 @@
         );
         var authorId = this.props.params.id;
         if (authorId) {
-            this.setState({author: AuthorApi.getAuthorById(authorId)} ); 
+            this.setState({author: AuthorStore.getAuthorById(authorId)} ); 
         }
     },
     routerWillLeave: function() {
@@ -50,7 +51,7 @@
              this.state.errors.firstName = "First name must be at least three characters";
              formIsValid = false;
          }
-          if (this.state.author.lastName.length < 3) {
+         if (this.state.author.lastName.length < 3) {
              this.state.errors.lastName = "Last name must be at least three characters";
              formIsValid = false;
          }
@@ -66,10 +67,22 @@
          if (!this.authorFormIsValid()) {
              return;
          }
-         this.setState({dirty:false});
-         AuthorApi.saveAuthor(this.state.author);
-         toastr.success('Author saved');
-         browserHistory.push('authors');
+
+         // If we have an ID we are updating an author - call appropriate action
+         if (this.state.author.id) {
+             AuthorActions.updateAuthor(this.state.author);
+         } else {
+             AuthorActions.createAuthor(this.state.author);
+         }
+
+         // Callback function ensures state has been changed before navigating (state changes are asynchronous)
+         // Otherwise 'dirty' flag might not be updated in time and the routerWillLeave hook will see the wrong value for dirty
+         this.setState({dirty:false}, function() {
+            
+            toastr.success('Author saved');
+            browserHistory.push('authors');
+         });
+
      },
 
      render: function() {

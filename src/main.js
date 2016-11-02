@@ -5,6 +5,11 @@ var Router = require('react-router').Router;
 var browserHistory = require('react-router').browserHistory;
 var Route = require('react-router').Route;
 var routes = require('./routes');
+
+var InitialiseActions = require('./actions/InitialiseActions');
+
+InitialiseActions.initApp();
+
 // Use the router to determine what to attach to our app element based upon what is in scope
 ReactDOM.render(<Router history={browserHistory} routes={routes}/>, document.getElementById('app') );
 
